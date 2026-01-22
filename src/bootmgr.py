@@ -2,13 +2,15 @@ import pygame
 import sys
 import os
 from enum import Enum
+import time
 
 class BootState(Enum):
     SPLASH = 1
-    MENU = 2
-    LOADING = 3
-    RUNNING = 4
-    SHUTDOWN = 5
+    RECOVERY = 2  # NEW
+    MENU = 3
+    LOADING = 4
+    RUNNING = 5
+    SHUTDOWN = 6
 
 class BootManager:
     def __init__(self, width=800, height=600):
@@ -19,12 +21,20 @@ class BootManager:
         pygame.display.set_caption("Console AndroidOS - Boot Manager")
         self.clock = pygame.time.Clock()
         
-        # BIOS-style monospace font (use Courier New or fallback to monospace)
+        # BIOS-style monospace font
         self.font_large = pygame.font.Font("src\\fonts\\ttf - Px (pixel outline)\\Px437_DOS-V_TWN19.ttf", 60)
         self.font_med = pygame.font.Font("src\\fonts\\ttf - Px (pixel outline)\\Px437_DOS-V_TWN19.ttf", 39)
         self.font_small = pygame.font.Font("src\\fonts\\ttf - Px (pixel outline)\\Px437_DOS-V_TWN19.ttf", 20)
         
-        self.state = BootState.SPLASH
+        # Check for crash flag
+        self.crash_detected = os.path.exists("D:/Console AndroidOS/bin/crash.flag")
+        
+        if self.crash_detected:
+            self.state = BootState.RECOVERY
+            self.recovery_progress = 0
+        else:
+            self.state = BootState.SPLASH
+            
         self.splash_timer = 0
         self.selected_option = 0
         self.running = True
@@ -60,7 +70,7 @@ class BootManager:
     def draw_splash(self):
         self.screen.fill((0, 0, 0))
         title = self.font_large.render("Console AndroidOS", True, (0, 255, 0))
-        subtitle = self.font_med.render("Build 398", True, (0, 200, 0))
+        subtitle = self.font_med.render("Build 420", True, (0, 200, 0))
         copyright_text = self.font_small.render("Copyright Beta Corporation (c). All rights reserved.", True, (100, 100, 100))
         
         self.screen.blit(title, (self.width // 2 - title.get_width() // 2, self.height // 2 - 100))
@@ -69,6 +79,47 @@ class BootManager:
         
         press_key = self.font_small.render("Press any key to continue...", True, (100, 255, 100))
         self.screen.blit(press_key, (self.width // 2 - press_key.get_width() // 2, self.height - 50))
+
+    def draw_recovery(self):
+        self.screen.fill((0, 0, 0))
+        
+        # Warning message
+        warning = self.font_large.render("System Recovery", True, (255, 100, 0))
+        self.screen.blit(warning, (self.width // 2 - warning.get_width() // 2, 80))
+        
+        # Crash detected message
+        crash_msg = self.font_small.render("Previous boot failed. Repairing system files...", True, (255, 0, 0))
+        self.screen.blit(crash_msg, (self.width // 2 - crash_msg.get_width() // 2, 160))
+        
+        # Progress bar
+        bar_width = 600
+        bar_height = 40
+        bar_x = self.width // 2 - bar_width // 2
+        bar_y = self.height // 2
+        
+        # Border
+        pygame.draw.rect(self.screen, (0, 255, 0), (bar_x - 2, bar_y - 2, bar_width + 4, bar_height + 4), 2)
+        
+        # Fill
+        fill_width = int((bar_width * self.recovery_progress) / 100)
+        pygame.draw.rect(self.screen, (0, 200, 0), (bar_x, bar_y, fill_width, bar_height))
+        
+        # Percentage text
+        percent_text = self.font_med.render(f"{int(self.recovery_progress)}%", True, (255, 255, 255))
+        self.screen.blit(percent_text, (self.width // 2 - percent_text.get_width() // 2, bar_y + bar_height + 20))
+        
+        # Status messages based on progress
+        if self.recovery_progress < 30:
+            status = "Checking file system integrity..."
+        elif self.recovery_progress < 60:
+            status = "Repairing corrupted sectors..."
+        elif self.recovery_progress < 90:
+            status = "Verifying system files..."
+        else:
+            status = "Finalizing recovery..."
+        
+        status_text = self.font_small.render(status, True, (100, 255, 100))
+        self.screen.blit(status_text, (self.width // 2 - status_text.get_width() // 2, bar_y + bar_height + 80))
 
     def draw_menu(self):
         self.screen.fill((0, 0, 0))
@@ -105,12 +156,27 @@ class BootManager:
     def update(self):
         if self.state == BootState.SPLASH:
             self.splash_timer += 1
+        elif self.state == BootState.RECOVERY:
+            # Increment progress
+            self.recovery_progress += 0.5  # Adjust speed as needed
+            
+            if self.recovery_progress >= 100:
+                # Recovery complete, remove flag and go to menu
+                try:
+                    os.remove("D:/Console AndroidOS/bin/crash.flag")
+                except:
+                    pass  # Flag already gone
+                
+                pygame.time.wait(500)  # Brief pause
+                self.state = BootState.MENU
         elif self.state == BootState.RUNNING:
             self.draw_running()
 
     def draw(self):
         if self.state == BootState.SPLASH:
             self.draw_splash()
+        elif self.state == BootState.RECOVERY:
+            self.draw_recovery()
         elif self.state == BootState.MENU:
             self.draw_menu()
         elif self.state == BootState.LOADING:

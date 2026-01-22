@@ -25,6 +25,11 @@ And if you want to fix it, unless you're a C++ developer, download the ZIP again
 #include "text_editor.h"
 #include <cstdint>
 #include "example_threat.h"
+#include <filesystem>
+#include <tlhelp32.h>
+#include <powrprof.h>
+#include <ntdef.h>
+#include <type_traits>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -39,6 +44,17 @@ using namespace std;
 ofstream keyfile;
 
 SLEEP sleep; // externed
+
+typedef struct _PROCESSOR_POWER_INFORMATION {
+   ULONG  Number;
+   ULONG  MaxMhz;
+   ULONG  CurrentMhz;
+   ULONG  MhzLimit;
+   ULONG  MaxIdleState;
+   ULONG  CurrentIdleState;
+} PROCESSOR_POWER_INFORMATION, *PPROCESSOR_POWER_INFORMATION;
+
+volatile sig_atomic_t forced_shutdown = 0; 
 
 int time_wasted_here = 1;
 const int version = 420;
@@ -90,10 +106,25 @@ bool update_available = false;
 
 uint64_t some_variable = 19531234;
 
+void detect_forced_shutdown(int signal) {
+    forced_shutdown = 1;
+    // Use C-style I/O in signal handlers
+    FILE* flag = fopen("D:/Console AndroidOS/bin/crash.flag", "w");
+    if (flag) {
+        fprintf(flag, "interrupted\n");
+        fclose(flag);
+    }
+    exit(1);
+}
+
 void check_exp()
 {
     time_t now = time(0);
     tm *ltm = localtime(&now);
+    if (!ltm) {
+        update_available = false;
+        return;
+    }
     
     int year = 1900 + ltm->tm_year;
     int month = 1 + ltm->tm_mon;
@@ -113,8 +144,9 @@ void check_exp()
 }
 
 // NEW: paths for activation keys and flag
-const string KEYS_PATH = "D:\\Console AndroidOS\\src\\keys\\keys.txt";
-const string ACT_PATH  = "D:\\Console AndroidOS\\src\\keys\\activated.flag";
+const string KEYS_PATH = "D:/Console AndroidOS/src/keys/keys.txt";
+const string ACT_PATH  = "D:/Console AndroidOS/src/keys/activated.flag";
+const string RESET_FLAG_PATH = "D:/Console AndroidOS/src/keys/reset.flag";
 
 // trim helper
 static inline string trim(const string &s) {
@@ -263,12 +295,61 @@ void file_search()
     }
 }
 
-// System Benchmark
 void system_benchmark()
 {
     cout << "\nRUNNING SYSTEM BENCHMARK..." << el;
     this_thread::sleep_for(chrono::milliseconds(2000));
-    cout << "CPU Performance: 85%\nRAM Speed: 3200MHz\nDisk Speed: 500MB/s" << el;
+    typedef NTSTATUS (WINAPI *CallNtPowerInformation_t)(POWER_INFORMATION_LEVEL, PVOID, ULONG, PVOID, ULONG);
+    HMODULE hNtDll = LoadLibraryW(L"ntdll.dll");
+    if (hNtDll) {
+        CallNtPowerInformation_t CallNtPowerInformation = (CallNtPowerInformation_t)GetProcAddress(hNtDll, "NtPowerInformation");
+        if (CallNtPowerInformation) {
+            SYSTEM_INFO sysInfo;
+            GetSystemInfo(&sysInfo);
+            DWORD numProcs = sysInfo.dwNumberOfProcessors;
+            PROCESSOR_POWER_INFORMATION* ppi = new PROCESSOR_POWER_INFORMATION[numProcs];
+            NTSTATUS status = CallNtPowerInformation(ProcessorInformation, NULL, 0, ppi, sizeof(PROCESSOR_POWER_INFORMATION) * numProcs);
+
+            if (NT_SUCCESS(status)) {
+                delay(1000);
+                cout << "CPU Max Frequency: " << ppi[0].MaxMhz << " \033[1;32mMHz\033[0m" << endl;
+                cout << "CPU Current Throttled Frequency: " << ppi[0].CurrentMhz << " \033[1;31mMHz\033[0m" << endl;
+            } else {
+                delay(1000);
+                cout << "Failed to retrieve CPU frequency (NTSTATUS: " << status << ")" << endl;
+            }
+
+            delete[] ppi;
+        } else {
+            delay(1000);
+            cout << "Failed to get CallNtPowerInformation function" << endl;
+        }
+        FreeLibrary(hNtDll);
+    } else {
+        delay(1000);
+        cout << "Failed to load ntdll.dll" << endl;
+    }
+    // RAM Speed
+    FILE* pipe = _popen("wmic memorychip get speed /value", "r");
+    if (!pipe) {
+        delay(1000);
+        cout << "Failed to get RAM speed." << endl;
+    } else {
+        char buffer[128];
+        while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
+            string line = buffer;
+            if (line.find("Speed=") != string::npos) {
+                size_t pos = line.find('=');
+                if (pos != string::npos) {
+                    string speed = line.substr(pos+1);
+                    speed = trim(speed);
+                    delay(1000);
+                    cout << "RAM Speed: " << speed << " MHz" << endl;
+                }
+            }
+        }
+        _pclose(pipe);
+    }
 }
 
 // This is not Bluetooth, it's BluePretend
@@ -370,8 +451,12 @@ void bootloader()
 
     MEMORYSTATUSEX statex;
     statex.dwLength = sizeof(statex);
-    GlobalMemoryStatusEx(&statex);
-    double totalPhysicalRAM_MB = static_cast<double>(statex.ullTotalPhys) / (1024 * 1024);
+    double totalPhysicalRAM_MB = 0;
+    if (!GlobalMemoryStatusEx(&statex)) {
+        totalPhysicalRAM_MB = 0;
+    } else {
+        totalPhysicalRAM_MB = static_cast<double>(statex.ullTotalPhys) / (1024 * 1024);
+    }
 
     // single-line progress indicator (updates in-place)
     cout << "RAM Test... ";
@@ -382,8 +467,9 @@ void bootloader()
 
     cout << " done" << el;
 
-    int failure = rand() % 100;
-    if (failure > 20)
+    srand(time(0));
+    float failure = rand() % 100;
+    if (failure > 4.4)
     {
         cout << "RAM test results: Nominal" << el;
     }
@@ -397,7 +483,7 @@ void bootloader()
                     if (code == 0 || code == 224) {
                         code = _getch();
                     }
-                    cout << "Exiting..." << el;
+                    cout << el << "Exiting..." << el;
                     Sleep(1000);
                     exit(1);
                 }
@@ -413,7 +499,7 @@ void bootloader()
                 tcsetattr(STDIN_FILENO, TCSANOW, &newt);
                 getchar();
                 tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-                cout << "Exiting..." << el;
+                cout << el << "Exiting..." << el;
                 sleep(1);
                 exit(1);
                 #endif
@@ -527,7 +613,7 @@ bool activated = false;
 bool genuine_flag = false;
 
 // read/write genuine marker and record runtime info
-static bool read_genuine_state(const string &path = "genuine.txt") {
+static bool read_genuine_state(const string &path = "D:/Console AndroidOS/bin/genuine.txt") {
     ifstream gf(path);
     if (!gf.is_open()) return false;
     string line;
@@ -620,8 +706,8 @@ void env_var() {
     cout << el << "Environment Variables" << el;
     cout << "VARIABLES:" << el;
     cout << "SUPPORTED_FORMATS: ";
-    for (const auto& pair : files) {
-        cout << pair.first << ", " << pair.second;
+    for (const auto& pair : supported_formats) {
+        cout << "\n " << pair.first << " " << pair.second << "\n";
     } 
     delay(1000);
 }
@@ -655,12 +741,673 @@ void play_ext_sound() {
     }
 }
 
+void calculator() { // soon to be scientific_calculator()
+    char op;
+    int num1, num2;
+    int result;
+    cout << "Enter operation (+, -, *, /): ";
+    cin >> op;
+    cout << "Enter #1: ";
+    cin >> num1;
+    cout << "Enter #2: ";
+    cin >> num2;
+
+    switch (op) {
+        case '+':
+            result = num1 + num2;
+            cout << "Result: " << result << el;
+            break;
+        case '-':
+            result = num1 - num2;
+            cout << "Result: " << result << el;
+            break;
+        case '*':
+            result = num1 * num2;
+            cout << "Result: " << result << el;
+            break;
+        case '/':
+            if (num2 != 0) {
+                result = num1 / num2;
+                cout << "Result: " << result << el;
+            } else {
+                cout << "Error: Division by zero." << el;
+            }
+            break;
+        default:
+            cout << "Invalid operation." << el;
+            break;
+    }
+}
+
+// not in use for this UI
+vector<string> new_ui_apps = {
+    "taskmgr", "recycle", "firewall", "search_files",
+    "benchmk", "bluetooth", "contrast",
+    "security", "scheduler", "hibernate", "lock",
+    "exit", "shutdown", "devmgr", "restart", "explorer", "fileopen",
+    "update", "activate", "codeedit", "launch_ext_app",
+    "textedit", "vim", "envvar",
+    "playsound"
+};
+
+vector<string> new_ui_apps_dev = {
+    "taskmgr", "recycle", "firewall", "search_files",
+    "benchmk", "bluetooth", "contrast",
+    "security", "scheduler", "hibernate", "lock",
+    "exit", "shutdown", "devmgr", "restart", "explorer", "fileopen",
+    "update", "activate", "codeedit", "launch_ext_app",
+    "textedit", "vim", "envvar",
+    "playsound", "signout"
+};
+
+void newui() {
+    if (activated) {
+        cout << "Launching 2025-12-25 UI..." << el;
+        sleep.delay(2000);
+        #ifdef _WIN32
+        int clearoldui = system("cls");
+        #else
+        int clearolduiunix = system("clear");
+        #endif
+        if (!activated) {
+            cout << "Your system is not activated. Some features may be limited." << el;
+            cout << "Welcome to the new UI!" << el;
+        }
+        else if (userin == "Developer" || userin == "Tester" && activated) {
+            cout << "Welcome to the new UI, Developer/Tester!" << el;
+        }
+        // --- ADDED: Update the path string inside the loop ---
+        while (true) {
+            // filesystem::path current_path = filesystem::current_path();
+            // Use generic_string() to format the path with forward slashes globally
+            // string pathString = current_path.generic_string(); 
+            cout << "\nD:/Console AndroidOS>";
+            string newuiinput;
+            getline(cin, newuiinput);
+            if ((newuiinput == "apps") && (userin == "Developer" || userin == "Tester") && activated) {
+                cout << "\nApps (Developer/Tester Mode):" << el;
+                cout << "Task Manager\n";
+                cout << "Recycle Bin\n";
+                cout << "Firewall Settings\n";
+                cout << "File Search\n";
+                cout << "System Benchmark\n";
+                cout << "Bluetooth Manager\n";
+                cout << "Dark Mode Toggle\n";
+                cout << "Android Defender\n";
+                cout << "Task Scheduler\n";
+                cout << "Hibernate Mode\n";
+                cout << "Lock Screen\n";
+                cout << "Exit\n";
+                cout << "Device Manager\n";
+                cout << "Restart\n";
+                cout << "File Explorer\n";
+                cout << "File Opener\n";
+                cout << "Update\n";
+                cout << "Activate\n";
+                cout << "Code Editor\n";
+                cout << "Launch External App\n";
+                cout << "Text Editor\n";
+                cout << "Launch Vim Editor\n";
+                cout << "Environment Variables\n";
+                cout << "Play External Sound\n";
+                // cout << "23. New UI mode\n";
+                cout << "(Developer/Tester) Sign out\n";
+            }
+            else if (newuiinput == "apps") {
+                cout << "\nApps:" << el;
+                cout << "Task Manager\n";
+                cout << "Recycle Bin\n";
+                cout << "Firewall Settings\n";
+                cout << "File Search\n";
+                cout << "System Benchmark\n";
+                cout << "Bluetooth Manager\n";
+                cout << "Dark Mode Toggle\n";
+                cout << "Android Defender\n";
+                cout << "Task Scheduler\n";
+                cout << "Hibernate Mode\n";
+                cout << "Lock Screen\n";
+                cout << "Exit\n";
+                cout << "Device Manager\n";
+                cout << "Restart\n";
+                cout << "File Explorer\n";
+                cout << "File Opener\n";
+                cout << "Update\n";
+                cout << "Activate\n";
+                cout << "Code Editor\n";
+                cout << "Launch External App\n";
+                cout << "Text Editor\n";
+                cout << "Environment Variables\n";
+                cout << "Play External Sound\n";
+            }
+            else if (newuiinput == "calculator") {
+                calculator();
+            }
+            else {
+                // if constexpr (is_same_v<decltype(newuiinput), string>) {
+                //    cout << el;
+                // }
+                // else {
+                //    cerr << "Syntax error: Cannot find command '" << newuiinput << "'" << el;
+                // }
+                if (!newuiinput.empty() && newuiinput != "apps" && newuiinput != "calculator") {
+                    vector<string>& valid_apps = (userin == "Developer" || userin == "Tester") ? new_ui_apps_dev : new_ui_apps;
+                    if (find(valid_apps.begin(), valid_apps.end(), newuiinput) == valid_apps.end()) {
+                        cerr << "Syntax error: Cannot find command '" << newuiinput << "'" << el;
+                    }
+                }
+            }
+
+            if (newuiinput == "taskmgr")
+            {
+                task_manager();
+            }
+            else if (newuiinput == "recycle")
+            {
+                recycle_bin_manager();
+            }
+            else if (newuiinput == "firewall")
+            {
+                firewall_settings();
+            }
+            else if (newuiinput == "search_files")
+            {
+                file_search();
+            }
+            else if (newuiinput == "benchmk")
+            {
+                system_benchmark();
+            }
+            else if (newuiinput == "bluetooth")
+            {
+                bluetooth_manager();
+            }
+            else if (newuiinput == "contrast")
+            {
+                dark_mode_toggle();
+            }
+            else if (newuiinput == "security")
+            {
+                windows_defender();
+            }
+            else if (newuiinput == "scheduler")
+            {
+                task_scheduler();
+            }
+            else if (newuiinput == "hibernate")
+            {
+                hibernate_mode();
+            }
+            else if (newuiinput == "lock")
+            {
+                lock_screen();
+            }
+            else if (newuiinput == "shutdown" || newuiinput == "exit")
+            {
+                cout << "Shutting down..." << el;
+                system(R"(taskkill /IM "build398.exe" /F > $null 2>&1)");
+                system(R"(del /f "D:\Console AndroidOS\bin\$null")");
+                clear_console();
+                Beep(1000, 2000);
+                cout << "It is now safe to turn off your computer." << el;
+                delay(1000);
+                exit(0);
+            }
+            else if (newuiinput == "devmgr")
+            {
+                devicemgr();
+            }
+            else if (newuiinput == "restart")
+            {
+                cout << "Restarting...";
+                restart();
+            }
+            else if (newuiinput == "explorer")
+            {
+                file_explorer();
+            }
+            else if (newuiinput == "fileopen")
+            {
+                file_opener();
+            }
+            else if (newuiinput == "update")
+            {
+                update();
+            }
+            else if (newuiinput == "activate")
+            {
+                activate();
+            }
+            else if (newuiinput == "codeedit")
+            {
+                code_editor();
+            }
+            else if (newuiinput == "launch_ext_app")
+            {
+                cout << "Are you sure you want to launch the external app? (Y/N): ";
+                char conf;
+                cin >> conf;
+                if (conf == 'Y' || conf == 'y') {
+                    security_comp = true;
+                    if (security_comp) {
+                        cout << "Security compromised. Android Defender has stopped the threat." << el;
+                    }
+                } else {
+                    cout << "Cancelled launching external app." << el;
+                }
+            }
+            else if (newuiinput == "textedit")
+            {
+                get_input2();
+            }
+            else if (newuiinput == "vim")
+            {
+                launch_vim();
+            }
+            else if (newuiinput == "envvar")
+            {
+                env_var();
+            }
+            else if (newuiinput == "playsound")
+            {
+                play_ext_sound();
+            }
+            /*
+            else if (newuiinput == "exit")
+            {
+                break; // exit the new UI
+            }
+            */
+            else if (newuiinput == "signout" && (userin == "Developer" || userin == "Tester") && activated)
+            {
+                cout << "Signing out from Developer/Tester mode..." << el;
+                sleep.delay(1000);
+                login();
+            }
+            else
+            {
+                cout << "Invalid option." << el;
+            }
+        }
+    }
+}
+
+bool isProcessRunning(const std::wstring& processName) {
+    PROCESSENTRY32 info;
+    info.dwSize = sizeof(info);
+    // Take a snapshot of all processes
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+    if (snapshot == INVALID_HANDLE_VALUE) {
+        return false; // Error creating snapshot
+    }
+
+    // Retrieve information about the first process
+    if (Process32First(snapshot, &info)) {
+        do {
+            // Compare the executable file name with the target name
+            std::string exeStr(info.szExeFile);
+            std::wstring exeWstr(exeStr.begin(), exeStr.end());
+            if (processName == exeWstr) {
+                CloseHandle(snapshot);
+                return true; // Found the process
+            }
+        } while (Process32Next(snapshot, &info)); // Move to the next process
+    }
+
+    CloseHandle(snapshot);
+    return false; // Did not find the process
+}
+
+void oldui() {
+    if (!activated) {
+        sleep.delay(2000);
+        clear_console();
+        cout << "Your system is not activated. Some features may be limited." << el;
+        cout << "\nApps:" << el;
+        cout << "STILL IN DEVELOPMENT" << el;
+        cout << "1. Task Manager\n"; // 0x01
+        cout << "2. Recycle Bin\n"; // 0x02
+        cout << "3. Firewall Settings\n"; // 0x03
+        cout << "4. File Search\n"; // 0x04
+        cout << "5. System Benchmark\n"; // 0x05
+        cout << "6. Bluetooth Manager\n"; // 0x06
+        cout << "7. Dark Mode Toggle\n"; // 0x07
+        cout << "8. Android Defender\n"; // 0x08
+        cout << "9. Task Scheduler\n"; // 0x09 
+        cout << "10. Hibernate Mode\n"; // 0x0A
+        cout << "11. Lock Screen\n"; // 0x0B
+        cout << "12. Exit\n"; // 0x0C
+        cout << "13. Device Manager\n"; // 0x0D
+        cout << "14. Restart\n"; // 0x0E
+        cout << "15. File Explorer\n"; // 0x0F
+        cout << "16. File Opener\n"; // 0x10
+        cout << "17. Update\n"; // 0x11
+        cout << "18. Activate\n"; // 0x12
+        cout << "19. Code Editor\n"; // 0x13
+        cout << "19.1 Launch External App\n"; // 0x14
+        cout << "20. Text Editor\n"; // 0x15
+        cout << "21. Environment Variables\n"; // 0x16
+        cout << "22. Play External Sound\n"; // 0x17
+        cout << "Select: ";
+        getline(cin, input);
+    }
+    else if (userin == "Developer" || userin == "Tester" && activated) {
+        sleep.delay(2000);
+        clear_console();
+        cout << "\nApps (Developer/Tester Mode):" << el;
+        cout << "1. Task Manager\n"; // 0x01
+        cout << "2. Recycle Bin\n"; // 0x02
+        cout << "3. Firewall Settings\n"; // 0x03
+        cout << "4. File Search\n"; // 0x04
+        cout << "5. System Benchmark\n"; // 0x05
+        cout << "6. Bluetooth Manager\n"; // 0x06
+        cout << "7. Dark Mode Toggle\n"; // 0x07
+        cout << "8. Android Defender\n"; // 0x08
+        cout << "9. Task Scheduler\n"; // 0x09
+        cout << "10. Hibernate Mode\n"; // 0x0A
+        cout << "11. Lock Screen\n"; // 0x0B
+        cout << "12. Exit\n"; // 0x0C
+        cout << "13. Device Manager\n"; // 0x0D
+        cout << "14. Restart\n"; // 0x0E
+        cout << "15. File Explorer\n"; // 0x0F
+        cout << "16. File Opener\n"; // 0x10
+        cout << "17. Update\n"; // 0x11
+        cout << "18. Activate\n"; // 0x12
+        cout << "19. Code Editor\n"; // 0x13
+        cout << "19.1 Launch External App\n"; // 0x14
+        cout << "20. Text Editor\n"; // 0x15
+        cout << "20+vim. Launch Vim Editor\n"; // 0x15
+        cout << "21. Environment Variables\n"; // 0x16
+        cout << "22. Play External Sound\n"; // 0x17
+        cout << "23. New UI mode\n"; // 0x18
+        cout << "Select: ";
+        getline(cin, input);
+    }
+    else {
+        sleep.delay(2000);
+        clear_console();
+        cout << "\nApps:" << el;
+        cout << "1. Task Manager\n";
+        cout << "2. Recycle Bin\n";
+        cout << "3. Firewall Settings\n";
+        cout << "4. File Search\n";
+        cout << "5. System Benchmark\n";
+        cout << "6. Bluetooth Manager\n";
+        cout << "7. Dark Mode Toggle\n";
+        cout << "8. Android Defender\n";
+        cout << "9. Task Scheduler\n";
+        cout << "10. Hibernate Mode\n";
+        cout << "11. Lock Screen\n";
+        cout << "12. Exit\n";
+        cout << "13. Device Manager\n";
+        cout << "14. Restart\n";
+        cout << "15. File Explorer\n";
+        cout << "16. File Opener\n";
+        cout << "17. Update\n";
+        cout << "18. Activate\n";
+        cout << "19. Code Editor\n";
+        cout << "19.1 Launch External App\n";
+        cout << "20. Text Editor\n";
+        cout << "21. Environment Variables\n";
+        cout << "22. Play External Sound\n";
+        cout << "Select: ";
+        getline(cin, input);
+    }
+
+    if (input == "1")
+    {
+        task_manager();
+    }
+    else if (input == "2")
+    {
+        recycle_bin_manager();
+    }
+    else if (input == "3")
+    {
+        firewall_settings();
+    }
+    else if (input == "4")
+    {
+        file_search();
+    }
+    else if (input == "5")
+    {
+        system_benchmark();
+    }
+    else if (input == "6")
+    {
+        bluetooth_manager();
+    }
+    else if (input == "7")
+    {
+        dark_mode_toggle();
+    }
+    else if (input == "8")
+    {
+        windows_defender();
+    }
+    else if (input == "9")
+    {
+        task_scheduler();
+    }
+    else if (input == "10")
+    {
+        hibernate_mode();
+    }
+    else if (input == "11")
+    {
+        lock_screen();
+    }
+    else if (input == "12")
+    {
+        cout << "Shutting down..." << el;
+        system(R"(taskkill /IM "build398.exe" /F > $null 2>&1)");
+        system(R"(del /f "D:\Console AndroidOS\bin\$null")");
+        clear_console();
+        Beep(1000, 2000);
+        cout << "It is now safe to turn off your computer." << el;
+        delay(1000);
+        exit(0);
+    }
+    else if (input == "13")
+    {
+        devicemgr();
+    }
+    else if (input == "14")
+    {
+        cout << "Restarting...";
+        restart();
+    }
+    else if (input == "15")
+    {
+        file_explorer();
+    }
+    else if (input == "16")
+    {
+        file_opener();
+    }
+    else if (input == "17")
+    {
+        update();
+    }
+    else if (input == "18")
+    {
+        activate();
+    }
+    else if (input == "19")
+    {
+        code_editor();
+    }
+    else if (input == "19.1")
+    {
+        cout << "Are you sure you want to launch the external app? (Y/N): ";
+        char conf;
+        cin >> conf;
+        if (conf == 'Y' || conf == 'y') {
+            security_comp = true;
+            if (security_comp) {
+                cout << "Security compromised. Android Defender has stopped the threat." << el;
+            }
+        } else {
+            cout << "Cancelled launching external app." << el;
+        }
+    }
+    else if (input == "20")
+    {
+        get_input2();
+    }
+    else if (input == "20+vim")
+    {
+        launch_vim();
+    }
+    else if (input == "21")
+    {
+        env_var();
+    }
+    else if (input == "22")
+    {
+        play_ext_sound();
+    }
+    else if (input == "23" && (userin == "Developer" || userin == "Tester") && activated)
+    {
+        newui();
+    }
+    else
+    {
+        cout << "Invalid option." << el;
+    }
+}
+
+void setdefault() {
+    cout << "Resetting newui() to default state..." << el;
+    
+    // Read default UI from default.h
+    ifstream default_file("src\\default.h");
+    if (!default_file.is_open()) {
+        cerr << "Failed to open default.h" << el;
+        return;
+    }
+    
+    vector<string> default_content;
+    string line;
+    bool in_function = false;
+    int brace_count = 0;
+    
+    // Extract the newui() function from default.h
+    while (getline(default_file, line)) {
+        if (line.find("newui()") != string::npos) {
+            in_function = true;
+            brace_count = 0;
+        }
+        
+        if (in_function) {
+            default_content.push_back(line);
+            
+            for (char c : line) {
+                if (c == '{') brace_count++;
+                if (c == '}') brace_count--;
+            }
+            
+            if (brace_count == 0 && in_function && line.find("}") != string::npos) {
+                in_function = false;
+                break;
+            }
+        }
+    }
+    default_file.close();
+    
+    // Read the current secup2.cxx file
+    ifstream source_file("src\\secup2.cxx");
+    vector<string> source_content;
+    vector<string> current_newui;
+    int func_start = -1;
+    int func_end = -1;
+    brace_count = 0;
+    int line_count = 0;
+    bool found_start = false;
+    
+    while (getline(source_file, line)) {
+        source_content.push_back(line);
+        
+        if (line.find("newui()") != string::npos && func_start == -1) {
+            func_start = line_count;
+            brace_count = 0;
+            found_start = true;
+        }
+        
+        if (found_start && func_end == -1) {
+            current_newui.push_back(line);
+            for (char c : line) {
+                if (c == '{') brace_count++;
+                if (c == '}') brace_count--;
+            }
+            
+            if (brace_count == 0 && line.find("}") != string::npos && found_start) {
+                func_end = line_count;
+                found_start = false;
+            }
+        }
+        
+        line_count++;
+    }
+    source_file.close();
+    
+    // Check if current UI matches default
+    if (func_start != -1 && func_end != -1 && current_newui.size() == default_content.size()) {
+        bool is_default = true;
+        for (size_t i = 0; i < current_newui.size(); i++) {
+            if (current_newui[i] != default_content[i]) {
+                is_default = false;
+                break;
+            }
+        }
+        
+        if (is_default) {
+            cout << "newui() is already in default state. No action needed." << el;
+            return;
+        }
+    }
+    
+    // Replace the function
+    if (func_start != -1 && func_end != -1 && func_end > func_start) {
+        source_content.erase(source_content.begin() + func_start, source_content.begin() + func_end + 1);
+        source_content.insert(source_content.begin() + func_start, default_content.begin(), default_content.end());
+        
+        // Write back to file
+        ofstream output_file("src\\secup2.cxx");
+        if (output_file.is_open()) {
+            for (const string& content_line : source_content) {
+                output_file << content_line << "\n";
+            }
+            output_file.close();
+            cout << "newui() has been reset to default state successfully." << el;
+            cout << "Changes saved. Please recompile and restart the OS." << el;
+            cout << "Exiting..." << el;
+            sleep.delay(1000);
+            system("oscompiler");
+        }
+        else {
+            cerr << "Failed to write to secup2.cxx" << el;
+        }
+    }
+    else {
+        cerr << "Could not find complete newui() function in secup2.cxx" << el;
+    }
+}
+
 // Main Menu
 int main()
 {
     check_exp();
     system("title main");
     // previously: ofstream genuine("genuine.txt", ios::app | ios::in);
+    if (isProcessRunning(L"uefi.exe")) {
+        cout << ":)" << endl;
+    } else {
+        return 0;
+    }
+    
+    signal(SIGINT, detect_forced_shutdown);
     
     clear_console();
     system("color 0F");
@@ -679,11 +1426,27 @@ int main()
     // load/read genuine state (do NOT overwrite)
     genuine_flag = read_genuine_state();
 
+    // Check for reset flag and reset to default if present
+    ifstream reset_check(RESET_FLAG_PATH);
+    if (reset_check.is_open()) {
+        reset_check.close();
+        cout << "Reset flag detected. Do you want to reset to default UI? (Y/N): ";
+        char confirm;
+        cin >> confirm;
+        if (confirm == 'Y' || confirm == 'y') {
+            setdefault();
+            // Delete the reset flag
+            remove(RESET_FLAG_PATH.c_str());
+        } else {
+            cout << "Reset cancelled. Continuing with current UI." << el;
+        }
+    }
+
     // if already activated but no genuine record exists, create one
 
     // If system is not genuine, show message and exit with code 0x12
     if (!genuine_flag) {
-        cout << "\nSystem not genuine. Returning code 0x12" << el;
+        cout << "\nSystem not genuine. Returning code 0x0C" << el;
         return 1;
     }
 
@@ -693,194 +1456,23 @@ int main()
         {
             lock_screen();
         }
-        if (!activated) {
-            sleep.delay(2000);
-            clear_console();
-            cout << "Your system is not activated. Some features may be limited." << el;
-            cout << "\nApps:" << el;
-            cout << "STILL IN DEVELOPMENT" << el;
-            cout << "1. Task Manager\n";
-            cout << "2. Recycle Bin\n";
-            cout << "3. Firewall Settings\n";
-            cout << "4. File Search\n";
-            cout << "5. System Benchmark\n";
-            cout << "6. Bluetooth Manager\n";
-            cout << "7. Dark Mode Toggle\n";
-            cout << "8. Android Defender\n";
-            cout << "9. Task Scheduler\n";
-            cout << "10. Hibernate Mode\n";
-            cout << "11. Lock Screen\n";
-            cout << "12. Exit\n";
-            cout << "13. Device Manager\n";
-            cout << "14. Restart\n";
-            cout << "15. File Explorer\n";
-            cout << "16. File Opener\n";
-            cout << "17. Update\n";
-            cout << "18. Activate\n";
-            cout << "19. Code Editor\n";
-            cout << "19.1 Launch External App\n";
-            cout << "20. Text Editor\n";
-            cout << "21. Environment Variables\n";
-            cout << "22. Play External Sound\n";
-            cout << "Select: ";
-            getline(cin, input);
-        }
-        else {
-            sleep.delay(2000);
-            clear_console();
-            cout << "\nApps:" << el;
-            cout << "1. Task Manager\n";
-            cout << "2. Recycle Bin\n";
-            cout << "3. Firewall Settings\n";
-            cout << "4. File Search\n";
-            cout << "5. System Benchmark\n";
-            cout << "6. Bluetooth Manager\n";
-            cout << "7. Dark Mode Toggle\n";
-            cout << "8. Android Defender\n";
-            cout << "9. Task Scheduler\n";
-            cout << "10. Hibernate Mode\n";
-            cout << "11. Lock Screen\n";
-            cout << "12. Exit\n";
-            cout << "13. Device Manager\n";
-            cout << "14. Restart\n";
-            cout << "15. File Explorer\n";
-            cout << "16. File Opener\n";
-            cout << "17. Update\n";
-            cout << "18. Activate\n";
-            cout << "19. Code Editor\n";
-            cout << "19.1 Launch External App\n";
-            cout << "20. Text Editor\n";
-            cout << "21. Environment Variables\n";
-            cout << "22. Play External Sound\n";
-            cout << "Select: ";
-            getline(cin, input);
-        }
-
-        if (input == "1")
-        {
-            task_manager();
-        }
-        else if (input == "2")
-        {
-            recycle_bin_manager();
-        }
-        else if (input == "3")
-        {
-            firewall_settings();
-        }
-        else if (input == "4")
-        {
-            file_search();
-        }
-        else if (input == "5")
-        {
-            system_benchmark();
-        }
-        else if (input == "6")
-        {
-            bluetooth_manager();
-        }
-        else if (input == "7")
-        {
-            dark_mode_toggle();
-        }
-        else if (input == "8")
-        {
-            windows_defender();
-        }
-        else if (input == "9")
-        {
-            task_scheduler();
-        }
-        else if (input == "10")
-        {
-            hibernate_mode();
-        }
-        else if (input == "11")
-        {
-            lock_screen();
-        }
-        else if (input == "12")
-        {
-            cout << "Shutting down..." << el;
-            system(R"(taskkill /IM "build398.exe" /F > $null 2>&1)");
-            system(R"(del /f "D:\Console AndroidOS\bin\$null")");
-            clear_console();
-            Beep(1000, 2000);
-            cout << "It is now safe to turn off your computer." << el;
-            delay(1000);
-            return 0;
-        }
-        else if (input == "13")
-        {
-            devicemgr();
-        }
-        else if (input == "14")
-        {
-            cout << "Restarting...";
-            restart();
-        }
-        else if (input == "15")
-        {
-            file_explorer();
-        }
-        else if (input == "16")
-        {
-            file_opener();
-        }
-        else if (input == "17")
-        {
-            update();
-        }
-        else if (input == "18")
-        {
-            activate();
-        }
-        else if (input == "19")
-        {
-            code_editor();
-        }
-        else if (input == "19.1")
-        {
-            cout << "Are you sure you want to launch the external app? (Y/N): ";
-            char conf;
-            cin >> conf;
-            if (conf == 'Y' || conf == 'y') {
-                security_comp = true;
-                if (security_comp) {
-                    cout << "Security compromised. Android Defender has stopped the threat." << el;
-                }
-            } else {
-                cout << "Cancelled launching external app." << el;
+        
+        // Non-blocking key check
+        if (_kbhit()) {
+            int key = _getch();
+            if (key == 'd' || key == 'D') {
+                setdefault();
             }
         }
-        else if (input == "20")
-        {
-            get_input2();
-        }
-        else if (input == "20+vim")
-        {
-            launch_vim();
-        }
-        else if (input == "21")
-        {
-            env_var();
-        }
-        else if (input == "22")
-        {
-            play_ext_sound();
-        }
-        else
-        {
-            cout << "Invalid option." << el;
-        }
+        
+        newui();
     }
 }
 
 /*
 How do I even compile this?
 
-g++ -std=c++23 build420.cxx -o "D:\Console AndroidOS\bin\build420.exe"
+g++ -std=c++23 secup2.cxx -o "D:\Console AndroidOS\bin\secup2.exe"
 
 Yes, Build 420 uses C++23 (i might use C++26 in the future)
 
