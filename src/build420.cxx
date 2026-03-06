@@ -76,7 +76,8 @@ uint64_t long_pass = 2092343984202025;
 string current_user = "guest";
 string theme = "Light";
 bool system_locked = false;
-bool update_available = false;
+bool update_available = true;
+bool reached_eol = false;
 
 uint64_t some_variable = 19531234;
 
@@ -90,13 +91,13 @@ void check_exp()
     int day = ltm->tm_mday;
 
     if (year > yeol) {
-        update_available = true;
+        reached_eol = true;
     } else if (year == yeol) {
         if (month > meol) {
-            update_available = true;
+            reached_eol = true;
         } else if (month == meol) {
             if (day >= deol) {
-                update_available = true;
+                reached_eol = true;
             }
         }
     }
@@ -491,14 +492,14 @@ void file_opener()
 
 void update()
 {
-    cout << "Updating to build: 508" << endl;
+    cout << "Updating to build: 420 Security Update 2" << endl;
     if (update_available == false)
     {
         cerr << "There is no updates... yet." << el;
     }
     else
     {
-        system("build508.exe");
+        system("uefi.exe");
     }
 }
 
@@ -587,7 +588,7 @@ int main()
     system("color 0F");
     string input;
     login();
-    if (update_available)
+    if (reached_eol)
     {
         cout << "Build 420 has reached it's EOL. Please update to build 420 to get the lastest features." << el;
         cout << "Stay in B420 at your own risk." << el;

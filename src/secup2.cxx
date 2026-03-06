@@ -170,55 +170,98 @@ void clear_console() {
 
 void login()
 {
-    cout << "Choose an user (Guest, Admin): ";
+    cout << "Choose a user (";
+    for (size_t i = 0; i < users.size(); ++i) {
+        if (i) cout << ", ";
+        cout << users[i];
+    }
+    cout << "): ";
     getline(cin, userin);
-    if (userin == users[1])
+    
+    // Trim whitespace from input
+    userin = trim(userin);
+    
+    // Convert to lowercase for case-insensitive comparison
+    for (char &c : userin) {
+        c = tolower(c);
+    }
+    
+    // Guest login (no password required)
+    if (userin == "guest")
     {
         cout << "Logging in as Guest..." << endl;
+        current_user = "Guest";
+        return;
     }
-    else if (userin == users[0])
+    
+    // Admin login
+    if (userin == "admin")
     {
-        cout << "Enter in the password: ";
+        cout << "Enter the password: ";
         getline(cin, passin);
-        if (passin == passwords[1])
+        if (passin == passwords[0])
         {
             cout << "Logging in as Admin..." << endl;
+            current_user = "Admin";
         }
         else
         {
-            cerr << "Incorrect password." << endl;
+            cerr << "Incorrect password. Access denied." << endl;
+            current_user = "guest";
         }
+        return;
     }
-    else if (userin == users[2])
+    
+    // Developer login
+    if (userin == "developer")
     {
-        cout << "Enter in the password: ";
+        cout << "Enter the password: ";
         getline(cin, passin);
         if (passin == passwords[1])
         {
-            cout << "Logging in as Developer..." << el;
+            cout << "Logging in as Developer..." << endl;
+            current_user = "Developer";
         }
         else
         {
-            cerr << "Incorrect password." << el;
+            cerr << "Incorrect password. Access denied." << endl;
+            current_user = "guest";
         }
+        return;
     }
-    else if (userin == users[3])
+    
+    // Tester login (requires numeric password)
+    if (userin == "tester")
     {
-        cout << "Enter in the password: ";
-        cin >> passin2;
-        if (passin2 == long_pass)
+        cout << "Enter the password: ";
+        getline(cin, passin);
+        if (passin == to_string(long_pass))
         {
-            cout << "Logging in as Tester..." << el;
+            cout << "Logging in as Tester..." << endl;
+            current_user = "Tester";
         }
         else
         {
-            cerr << "Incorrect password." << el;
+            cerr << "Incorrect password. Access denied." << endl;
+            current_user = "guest";
+        }
+        return;
+    }
+    
+    // handle any other user defined in users vector (guest-level access)
+    for (const auto &u : users) {
+        if (u != "Admin" && u != "Guest" && u != "Developer" && u != "Tester") {
+            if (_stricmp(u.c_str(), userin.c_str()) == 0) {
+                cout << "Logging in as " << u << "..." << endl;
+                current_user = u;
+                return;
+            }
         }
     }
-    else
-    {
-        cerr << "Invalid user." << el;
-    }
+
+    // Invalid user
+    cerr << "User '" << userin << "' not found. Access denied." << endl;
+    current_user = "guest";
 }
 
 // Task Manager
@@ -813,7 +856,7 @@ void newui() {
             cout << "Your system is not activated. Some features may be limited." << el;
             cout << "Welcome to the new UI!" << el;
         }
-        else if (userin == "Developer" || userin == "Tester" && activated) {
+        else if (current_user == "Developer" || current_user == "Tester" && activated) {
             cout << "Welcome to the new UI, Developer/Tester!" << el;
         }
         // --- ADDED: Update the path string inside the loop ---
@@ -890,7 +933,7 @@ void newui() {
                 //    cerr << "Syntax error: Cannot find command '" << newuiinput << "'" << el;
                 // }
                 if (!newuiinput.empty() && newuiinput != "apps" && newuiinput != "calculator") {
-                    vector<string>& valid_apps = (userin == "Developer" || userin == "Tester") ? new_ui_apps_dev : new_ui_apps;
+                    vector<string>& valid_apps = (current_user == "Developer" || current_user == "Tester") ? new_ui_apps_dev : new_ui_apps;
                     if (find(valid_apps.begin(), valid_apps.end(), newuiinput) == valid_apps.end()) {
                         cerr << "Syntax error: Cannot find command '" << newuiinput << "'" << el;
                     }
@@ -1398,6 +1441,7 @@ void setdefault() {
 // Main Menu
 int main()
 {
+    clear_console();
     check_exp();
     system("title main");
     // previously: ofstream genuine("genuine.txt", ios::app | ios::in);
@@ -1406,10 +1450,80 @@ int main()
     } else {
         return 0;
     }
+
+    ifstream userFile("users.txt");
+    ifstream allowFile("allow.flag");
+    string flagWord;
+    string allowWord;
+    bool allow_flag = false;
+
+    cout << "Reading users.txt..." << endl;
+    if (userFile.is_open()) {
+        string line;
+        while (getline(userFile, line)) {
+            line = trim(line);
+            if (line.empty())
+                continue; // skip blank lines
+            // ignore obvious headers or comments
+            if (line.front() == '#' || line.front() == ';')
+                continue;
+
+            string detectedUser;
+            // look for lines starting with "username=" (case-sensitive)
+            if (line.rfind("username=", 0) == 0) {
+                detectedUser = trim(line.substr(strlen("username=")));
+                // credentials may follow the actual username separated by commas;
+                // keep only the first field as the username
+                size_t comma = detectedUser.find(',');
+                if (comma != string::npos) {
+                    string raw = detectedUser.substr(0, comma);
+                    detectedUser = trim(raw);
+                }
+            } else if (line.find(' ') == string::npos && line.find('=') == string::npos) {
+                // fallback: a single word with no spaces or '=' is treated as username
+                detectedUser = line;
+            } else {
+                // if the line isn't a plain username, skip it
+                continue;
+            }
+
+            if (!detectedUser.empty()) {
+                // avoid duplicates (case-insensitive)
+                bool exists = false;
+                for (const auto &u : users) {
+                    if (_stricmp(u.c_str(), detectedUser.c_str()) == 0) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    users.push_back(detectedUser);
+                    cout << "Added user from file: " << detectedUser << endl;
+                }
+            }
+        }
+    } else {
+        cerr << "Unable to open users.txt (0x03)" << endl;
+    }
+    // debug: show all users we currently have
+    cout << "Final user list:";
+    for (const auto &u : users) {
+        cout << " " << u;
+    }
+    cout << endl;
+
+    sleep.delay(1000);
+    cout << "Reading allow.flag..." << endl;
+    while (allowFile >> allowWord) {
+        if (allowWord == "allow=true") {
+            allow_flag = true;
+            break;
+        }
+    }
+    sleep.delay(1000);
     
     signal(SIGINT, detect_forced_shutdown);
-    
-    clear_console();
+
     system("color 0F");
     string input;
     login();
