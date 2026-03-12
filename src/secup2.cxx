@@ -65,6 +65,7 @@ const int yeol = 2042;
 const int meol = 1;
 const int deol = 16;
 bool security_comp = false;
+bool graphics_driver = false;
 
 // Maps are so f[beep]ing confusing
 map<string, string> files = 
@@ -843,6 +844,27 @@ vector<string> new_ui_apps_dev = {
     "playsound", "signout"
 };
 
+void powerop() {
+    cout << "Power options: \n1. Restart\n2. Shutdown\n3. Sign out\n>> ";
+    string powerinp;
+    getline(cin, powerinp);
+    if (powerinp == "Restart" || powerinp == "restart") {
+        cout << "Restarting..." << el;
+        restart();
+    } else if (powerinp == "Shutdown" || powerinp == "shutdown") {
+        cout << "Shutting down..." << el;
+        // system(R"(taskkill /IM "build398.exe" /F > $null 2>&1)");
+        system(R"(taskkill /IM "build398.exe" /F)");
+        // system(R"(del /f "D:\Console AndroidOS\bin\$null")");
+        clear_console();
+        exit(0);
+    } else if (powerinp == "Sign out" || powerinp == "sign out" || powerinp == "signout") {
+        login();
+    } else {
+        cout << "Invalid option." << el;
+    }
+}
+
 void newui() {
     if (activated) {
         cout << "Launching 2025-12-25 UI..." << el;
@@ -867,7 +889,7 @@ void newui() {
             cout << "\nD:/Console AndroidOS>";
             string newuiinput;
             getline(cin, newuiinput);
-            if ((newuiinput == "apps") && (userin == "Developer" || userin == "Tester") && activated) {
+            if ((newuiinput == "apps") && (current_user == "Developer" || current_user == "Tester")) {
                 cout << "\nApps (Developer/Tester Mode):" << el;
                 cout << "Task Manager\n";
                 cout << "Recycle Bin\n";
@@ -880,9 +902,9 @@ void newui() {
                 cout << "Task Scheduler\n";
                 cout << "Hibernate Mode\n";
                 cout << "Lock Screen\n";
-                cout << "Exit\n";
+                // cout << "Exit\n";
                 cout << "Device Manager\n";
-                cout << "Restart\n";
+                // cout << "Restart\n";
                 cout << "File Explorer\n";
                 cout << "File Opener\n";
                 cout << "Update\n";
@@ -894,7 +916,7 @@ void newui() {
                 cout << "Environment Variables\n";
                 cout << "Play External Sound\n";
                 // cout << "23. New UI mode\n";
-                cout << "(Developer/Tester) Sign out\n";
+                cout << "(Developer/Tester) Power\n";
             }
             else if (newuiinput == "apps") {
                 cout << "\nApps:" << el;
@@ -921,6 +943,7 @@ void newui() {
                 cout << "Text Editor\n";
                 cout << "Environment Variables\n";
                 cout << "Play External Sound\n";
+                cout << "Sign out\n";
             }
             else if (newuiinput == "calculator") {
                 calculator();
@@ -1004,6 +1027,9 @@ void newui() {
                 cout << "Restarting...";
                 restart();
             }
+            else if (newuiinput == "power" && (current_user == "Developer" || current_user == "Tester") && activated) {
+                powerop();
+            }
             else if (newuiinput == "explorer")
             {
                 file_explorer();
@@ -1060,7 +1086,7 @@ void newui() {
                 break; // exit the new UI
             }
             */
-            else if (newuiinput == "signout" && (userin == "Developer" || userin == "Tester") && activated)
+            else if (newuiinput == "signout")
             {
                 cout << "Signing out from Developer/Tester mode..." << el;
                 sleep.delay(1000);
@@ -1438,6 +1464,26 @@ void setdefault() {
     }
 }
 
+void read_driver() {
+    ifstream driver_file("driver.aos");
+    if (!driver_file.is_open()) {
+        cerr << "Failed to open graphics driver" << el;
+        return;
+    }
+    string line;
+    vector<string> graphics = {"DLSS", "Direct", "NVIDIA"};
+    while (getline(driver_file, line)) {
+        line = trim(line);
+        for (int i = 0; i < graphics.size(); i++) {
+            if (line.find(graphics[i]) == 0) {
+                graphics_driver = true;
+                cout << "Graphics driver loaded: " << graphics[i] << el;
+                break;
+            }
+        }
+    }
+}
+
 // Main Menu
 int main()
 {
@@ -1564,22 +1610,29 @@ int main()
         return 1;
     }
 
-    while (true)
-    {
-        if (system_locked)
+    read_driver();
+
+    if (graphics_driver) {
+        while (true)
         {
-            lock_screen();
-        }
-        
-        // Non-blocking key check
-        if (_kbhit()) {
-            int key = _getch();
-            if (key == 'd' || key == 'D') {
-                setdefault();
+            if (system_locked)
+            {
+                lock_screen();
             }
+            
+            // Non-blocking key check
+            if (_kbhit()) {
+                int key = _getch();
+                if (key == 'd' || key == 'D') {
+                    setdefault();
+                }
+            }
+            
+            newui();
         }
-        
-        newui();
+    }
+    else {
+        return 0;
     }
 }
 
@@ -1609,7 +1662,7 @@ AND YES, I HAVE TO HARDTYPE THE PATH, BECAUSE OF PATH ISSUES.
 // Q: Are there any bugs?
 // A: There are... quite a few. Every software has bugs. Windows has bugs, macOS has bugs, Linux has bugs, even AndroidOS has bugs. Deal with it.
 // Q: Will there be more builds?
-// A: Yes, build 420 is the next one.
+// A: Yes, build 508 is the next one.
 // Q: Will the source code be open-sourced?
 // A: It's on GitHub.
 // Q: Can I contribute?

@@ -1,0 +1,17 @@
+import cpulib.pu
+
+class integer(setmax(64))
+
+if os(true):
+    return 1
+
+setcores(
+    p = 8,
+    e = 16,
+)
+
+manufacturer = "intel"
+series = "i9"
+generation = "14"
+
+exit(0x01) // makes sure that the os can read the CPU

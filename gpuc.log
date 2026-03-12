@@ -1,0 +1,36 @@
+start main, argc=2
+arg1=gpu.gpu
+ext returned=.gpu
+starting copy
+copy done
+exeName=gpu.exe
+command=g++ gpu.cpp -o gpu.exe
+system returned 1
+compilation failed
+start main, argc=2
+arg1=gpu.gpu
+ext returned=.gpu
+starting copy
+copy done
+exeName=gpu.exe
+command=g++ gpu.cpp -o gpu.exe
+system returned 1
+compilation failed
+start main, argc=2
+arg1=gpu.gpu
+ext returned=.gpu
+starting copy
+copy done
+exeName=gpu.exe
+command=g++ gpu.cpp -o gpu.exe
+system returned 1
+compilation failed
+start main, argc=2
+arg1=gpu.gpu
+ext returned=.gpu
+starting copy
+copy done
+exeName=gpu.exe
+command=g++ gpu.cpp -o gpu.exe
+system returned 0
+finished successfully
