@@ -67,6 +67,10 @@ const int deol = 16;
 bool security_comp = false;
 bool graphics_driver = false;
 
+MEMORYSTATUSEX getmemInfo;
+
+atomic<bool> block_memory_check(false);
+
 // Maps are so f[beep]ing confusing
 map<string, string> files = 
 {
@@ -86,11 +90,25 @@ map<string, string> supported_formats =
 
 vector<string> recycle_bin;
 vector<string> installed_apps = {"File Explorer", "Calculator", "System Info"};
-map<string, string> app_store = 
-{
-    {"Notepad", "A simple text editor"},
-    {"Weather", "Shows the current weather"},
-    {"Media Player", "Plays audio and video files"}
+// not in use for this UI
+vector<string> new_ui_apps = {
+    "taskmgr", "recycle", "firewall", "search_files",
+    "benchmk", "bluetooth", "contrast",
+    "security", "scheduler", "hibernate", "lock",
+    "exit", "shutdown", "devmgr", "restart", "explorer", "fileopen",
+    "update", "activate", "codeedit", "launch_ext_app",
+    "textedit", "vim", "envvar",
+    "playsound"
+};
+
+vector<string> new_ui_apps_dev = {
+    "taskmgr", "recycle", "firewall", "search_files",
+    "benchmk", "bluetooth", "contrast",
+    "security", "scheduler", "hibernate", "lock",
+    "exit", "shutdown", "devmgr", "restart", "explorer", "fileopen",
+    "update", "activate", "codeedit", "launch_ext_app",
+    "textedit", "vim", "envvar",
+    "playsound", "signout"
 };
 
 // I am not gonna prevent anyone hacking into this s[beep]
@@ -106,6 +124,27 @@ bool system_locked = false;
 bool update_available = false;
 
 uint64_t some_variable = 19531234;
+
+void check_memory() {
+    while (!block_memory_check) {
+        getmemInfo.dwLength = sizeof(getmemInfo);
+        if (!GlobalMemoryStatusEx(&getmemInfo)) {
+            cerr << "Failed to get memory status." << el;
+        }
+        double totalRAM = static_cast<double>(getmemInfo.ullTotalPhys) / (1024 * 1024);
+        double availRAM = static_cast<double>(getmemInfo.ullAvailPhys) / (1024 * 1024);
+        double usedRAM = totalRAM - availRAM;
+        double usagePercent = (usedRAM / totalRAM) * 100.0;
+
+        if (availRAM < 256.0) {
+            cerr << "Warning: Low available memory detected (" << availRAM << " MB available). Performance may be affected." << el;
+        }
+        if (usagePercent > 90.0) {
+            cerr << "Warning: High memory usage detected (" << usagePercent << "% used). Consider closing some applications." << el;
+        }
+        this_thread::sleep_for(chrono::seconds(10)); // Check every 10 seconds
+    }
+} 
 
 void detect_forced_shutdown(int signal) {
     forced_shutdown = 1;
@@ -270,12 +309,23 @@ void task_manager()
 {
     cout << "\nTASK MANAGER - Running Processes" << el;
     cout << "--------------------------------" << el;
-    cout << "1. SYSTEM_KERNEL - Running" << el;
-    cout << "2. FILE_MANAGER - Idle" << el;
-    cout << "3. NETWORK_SERVICE - Running" << el;
-    cout << "4. GRAPHICS_ENGINE - Running" << el;
-    cout << "5. BACKGROUND_TASK - Sleeping" << el;
+    // List simulated apps based on user
+    vector<string> apps = (current_user == "Developer" || current_user == "Tester") ? new_ui_apps_dev : new_ui_apps;
+    cout << "Installed Apps:" << el;
+    for (size_t i = 0; i < apps.size(); ++i) {
+        cout << i + 1 << ". " << apps[i] << el;
+    }
     cout << "--------------------------------" << el;
+    // Add memory info
+    MEMORYSTATUSEX memInfo;
+    memInfo.dwLength = sizeof(memInfo);
+    if (GlobalMemoryStatusEx(&memInfo)) {
+        double totalMB = static_cast<double>(memInfo.ullTotalPhys) / (1024 * 1024);
+        double availMB = static_cast<double>(memInfo.ullAvailPhys) / (1024 * 1024);
+        double usedMB = totalMB - availMB;
+        double usagePercent = (usedMB / totalMB) * 100.0;
+        cout << "Memory Usage: " << fixed << setprecision(1) << usedMB << " MB used / " << totalMB << " MB total (" << usagePercent << "%)\n";
+    }
 }
 
 // Why recycle bin? Find the reason yourselves.
@@ -393,6 +443,17 @@ void system_benchmark()
             }
         }
         _pclose(pipe);
+    }
+    // Current Memory Usage
+    MEMORYSTATUSEX memInfo;
+    memInfo.dwLength = sizeof(memInfo);
+    if (GlobalMemoryStatusEx(&memInfo)) {
+        double totalMB = static_cast<double>(memInfo.ullTotalPhys) / (1024 * 1024);
+        double availMB = static_cast<double>(memInfo.ullAvailPhys) / (1024 * 1024);
+        double usedMB = totalMB - availMB;
+        double usagePercent = (usedMB / totalMB) * 100.0;
+        delay(1000);
+        cout << "Current Memory: " << fixed << setprecision(1) << availMB << " MB available / " << totalMB << " MB total (" << usagePercent << "% used)" << endl;
     }
 }
 
@@ -776,7 +837,7 @@ void play_ext_sound() {
     cout << "Playing external sound..." << el;
 
     // quote the script and the argument
-    string command = "sounddriver \"" + soundinp + "\"";
+    string command = "python src\\sounddriver.py \"" + soundinp + "\"";
 
     // try executing
     int rc = system(command.c_str());
@@ -823,27 +884,6 @@ void calculator() { // soon to be scientific_calculator()
     }
 }
 
-// not in use for this UI
-vector<string> new_ui_apps = {
-    "taskmgr", "recycle", "firewall", "search_files",
-    "benchmk", "bluetooth", "contrast",
-    "security", "scheduler", "hibernate", "lock",
-    "exit", "shutdown", "devmgr", "restart", "explorer", "fileopen",
-    "update", "activate", "codeedit", "launch_ext_app",
-    "textedit", "vim", "envvar",
-    "playsound"
-};
-
-vector<string> new_ui_apps_dev = {
-    "taskmgr", "recycle", "firewall", "search_files",
-    "benchmk", "bluetooth", "contrast",
-    "security", "scheduler", "hibernate", "lock",
-    "exit", "shutdown", "devmgr", "restart", "explorer", "fileopen",
-    "update", "activate", "codeedit", "launch_ext_app",
-    "textedit", "vim", "envvar",
-    "playsound", "signout"
-};
-
 void powerop() {
     cout << "Power options: \n1. Restart\n2. Shutdown\n3. Sign out\n>> ";
     string powerinp;
@@ -854,7 +894,7 @@ void powerop() {
     } else if (powerinp == "Shutdown" || powerinp == "shutdown") {
         cout << "Shutting down..." << el;
         // system(R"(taskkill /IM "build398.exe" /F > $null 2>&1)");
-        system(R"(taskkill /IM "build398.exe" /F)");
+        system(R"(taskkill /IM "build398.exe" /F 2>&1)");
         // system(R"(del /f "D:\Console AndroidOS\bin\$null")");
         clear_console();
         exit(0);
@@ -886,7 +926,13 @@ void newui() {
             // filesystem::path current_path = filesystem::current_path();
             // Use generic_string() to format the path with forward slashes globally
             // string pathString = current_path.generic_string(); 
-            cout << "\nD:/Console AndroidOS>";
+            MEMORYSTATUSEX memInfo;
+            memInfo.dwLength = sizeof(memInfo);
+            double availMB = 0.0;
+            if (GlobalMemoryStatusEx(&memInfo)) {
+                availMB = static_cast<double>(memInfo.ullAvailPhys) / (1024 * 1024);
+            }
+            cout << "\nD:/Console AndroidOS> [RAM: " << fixed << setprecision(1) << availMB << " MB free]";
             string newuiinput;
             getline(cin, newuiinput);
             if ((newuiinput == "apps") && (current_user == "Developer" || current_user == "Tester")) {
@@ -1487,6 +1533,7 @@ void read_driver() {
 // Main Menu
 int main()
 {
+    thread t(check_memory);
     clear_console();
     check_exp();
     system("title main");
