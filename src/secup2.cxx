@@ -647,12 +647,15 @@ void restart()
 
 void file_explorer()
 {
+    /*
     cout << "\nAll files: " << el;
     for (const auto& pair : files)
     {
         cout << pair.first << ": " << pair.second << el;
     }
     system("\n");
+    */
+    int launch = system("sfs.exe");
 }
 
 string error = R"(0x02)";
@@ -932,7 +935,8 @@ void newui() {
             if (GlobalMemoryStatusEx(&memInfo)) {
                 availMB = static_cast<double>(memInfo.ullAvailPhys) / (1024 * 1024);
             }
-            cout << "\nD:/Console AndroidOS> [RAM: " << fixed << setprecision(1) << availMB << " MB free]";
+            cout << "\n[RAM: " << fixed << setprecision(1) << availMB << " MB free]\n";
+            cout << "\nD:/Console AndroidOS> ";
             string newuiinput;
             getline(cin, newuiinput);
             if ((newuiinput == "apps") && (current_user == "Developer" || current_user == "Tester")) {

@@ -2,12 +2,18 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <windows.h>
 
-using namespace gpu;
-using namespace std;
+class GETMONITOR {
+    public:
+    const int width = GetSystemMetrics(SM_CXSCREEN);
+    const int height = GetSystemMetrics(SM_CYSCREEN);
+};
+
+GETMONITOR monitor;
 
 int main() {
-    details(
+    gpu::details(
         "NVIDIA GeForce RTX 5090", // GPU name
         true, // NVIDIA
         21760, // CUDAcores (NVIDIA GPU)
@@ -21,20 +27,28 @@ int main() {
         "DLSS 4, RT 4.0, TC 5.0" // supported graphics features
     );
 
-    ofstream gpuInfoFile("gpu_info.txt", ios::out); // Open a file to write GPU details
+    pixel_cal nwidth;
+    pixel_cal nheight;
+
+    int nwidth_value = nwidth.calculate_monitor(monitor.width, monitor.height, 60.0f);
+    int nheight_value = nheight.calculate_monitor(monitor.width, monitor.height, 60.0f);
+
+    std::ofstream gpuInfoFile("gpu_info.txt", std::ios::out); // Open a file to write GPU details
     if (gpuInfoFile.is_open()) {
-        gpuInfoFile << "GPU Name: NVIDIA GeForce RTX 5090" << endl;
-        gpuInfoFile << "Vendor: NVIDIA" << endl;
-        gpuInfoFile << "CUDA Cores: 21760" << endl;
-        gpuInfoFile << "GPU Structure: NVIDIA Blackwell" << endl;
-        gpuInfoFile << "VRAM: 32 GB GDDR7" << endl;
-        gpuInfoFile << "Memory Interface: 512-bit" << endl;
-        gpuInfoFile << "Bandwidth: 1792 GB/s" << endl;
-        gpuInfoFile << "Base Clock: 2.01 GHz" << endl;
-        gpuInfoFile << "TGP: 575 W" << endl;
-        gpuInfoFile << "Supported Graphics Features: DLSS 4, RT 4.0, TC 5.0" << endl;
+        gpuInfoFile << "GPU Name: NVIDIA GeForce RTX 5090" << std::endl;
+        gpuInfoFile << "Vendor: NVIDIA" << std::endl;
+        gpuInfoFile << "CUDA Cores: 21760" << std::endl;
+        gpuInfoFile << "GPU Structure: NVIDIA Blackwell" << std::endl;
+        gpuInfoFile << "VRAM: 32 GB GDDR7" << std::endl;
+        gpuInfoFile << "Memory Interface: 512-bit" << std::endl;
+        gpuInfoFile << "Bandwidth: 1792 GB/s" << std::endl;
+        gpuInfoFile << "Base Clock: 2.01 GHz" << std::endl;
+        gpuInfoFile << "TGP: 575 W" << std::endl;
+        gpuInfoFile << "Supported Graphics Features: DLSS 4, RT 4.0, TC 5.0" << std::endl;
+        gpuInfoFile << "Calculated Monitor Refresh Rate (60Hz): " << nwidth_value << " pixels/second" << std::endl;
+        gpuInfoFile << "Calculated Monitor Refresh Rate (60Hz): " << nheight_value << " pixels/second" << std::endl;
         gpuInfoFile.close(); // Close the file after writing
     } else {
-        cerr << "Unable to open file for writing GPU details." << endl;
+        std::cerr << "Unable to open file for writing GPU details." << std::endl;
     }
 }
