@@ -1,0 +1,12 @@
+GPU Name: AMD Radeon RX 9070 XT
+Vendor: AMD
+Cores: 4096
+GPU Structure: AMD RDNA 4
+VRAM: 16 GB GDDR6
+Memory Interface: 256-bit
+Bandwidth: 640 GB/s
+Base Clock: 2.97 GHz
+TGP: 304 W
+Supported Graphics Features: DirectX 12 Ultimate
+Calculated Monitor Refresh Rate (60Hz): 124416000 pixels/second
+Calculated Monitor Refresh Rate (60Hz): 124416000 pixels/second

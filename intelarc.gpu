@@ -1,0 +1,54 @@
+#include <iostream>
+#include "caos/gpu.hpp"
+#include <fstream>
+#include <cmath>
+#include <windows.h>
+
+class GETMONITOR {
+    public:
+    const int width = GetSystemMetrics(SM_CXSCREEN);
+    const int height = GetSystemMetrics(SM_CYSCREEN);
+};
+
+GETMONITOR monitor;
+
+int main() {
+    gpu::details(
+        "Intel ARC B580",
+        false,
+        205,
+        "Xe2-HPG Battlemage",
+        12,
+        "GDDR6",
+        192,
+        456,
+        2.67f,
+        190,
+        "DirectX 12 Ultimate, Vulkan 1.3/OpenGL 4.6, Intel XeSS 2, Intel XeLL"
+    );
+
+    pixel_cal nwidth;
+    pixel_cal nheight;
+
+    int nwidth_value = nwidth.calculate_monitor(monitor.width, monitor.height, 60.0f);
+    int nheight_value = nheight.calculate_monitor(monitor.width, monitor.height, 60.0f);
+
+    std::ofstream gpuInfoFile("intelarc_info.txt", std::ios::out); // Open a file to write GPU details
+    if (gpuInfoFile.is_open()) {
+        gpuInfoFile << "GPU Name: Intel ARC B580" << std::endl;
+        gpuInfoFile << "Vendor: Intel" << std::endl;
+        gpuInfoFile << "Cores: 205" << std::endl;
+        gpuInfoFile << "GPU Structure: Xe2-HPG Battlemage" << std::endl;
+        gpuInfoFile << "VRAM: 12 GB GDDR6" << std::endl;
+        gpuInfoFile << "Memory Interface: 192-bit" << std::endl;
+        gpuInfoFile << "Bandwidth: 456 GB/s" << std::endl;
+        gpuInfoFile << "Base Clock: 2.67 GHz" << std::endl;
+        gpuInfoFile << "TGP: 190 W" << std::endl;
+        gpuInfoFile << "Supported Graphics Features: DirectX 12 Ultimate, Vulkan 1.3/OpenGl 4.6, Intel XeSS 2, Intel XeLL" << std::endl;
+        gpuInfoFile << "Calculated Monitor Refresh Rate (60Hz): " << nwidth_value << " pixels/second" << std::endl;
+        gpuInfoFile << "Calculated Monitor Refresh Rate (60Hz): " << nheight_value << " pixels/second" << std::endl;
+        gpuInfoFile.close(); // Close the file after writing
+    } else {
+        std::cerr << "Unable to open file for writing GPU details." << std::endl;
+    }
+}

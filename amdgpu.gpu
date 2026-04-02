@@ -1,0 +1,54 @@
+#include <iostream>
+#include "caos/gpu.hpp"
+#include <fstream>
+#include <cmath>
+#include <windows.h>
+
+class GETMONITOR {
+    public:
+    const int width = GetSystemMetrics(SM_CXSCREEN);
+    const int height = GetSystemMetrics(SM_CYSCREEN);
+};
+
+GETMONITOR monitor;
+
+int main() {
+    gpu::details(
+        "AMD Radeon RX 9070 XT",
+        false,
+        4096,
+        "AMD RDNA 4",
+        16,
+        "GDDR6",
+        256,
+        640,
+        2.97f,
+        304,
+        "DirectX 12 Ultimate"
+    );
+
+    pixel_cal nwidth;
+    pixel_cal nheight;
+    
+    int nwidth_value = nwidth.calculate_monitor(monitor.width, monitor.height, 60.0f);
+    int nheight_value = nheight.calculate_monitor(monitor.width, monitor.height, 60.0f);
+
+    std::ofstream gpuInfoFile("amdgpu_info.txt", std::ios::out); // Open a file to write GPU details
+    if (gpuInfoFile.is_open()) {
+        gpuInfoFile << "GPU Name: AMD Radeon RX 9070 XT" << std::endl;
+        gpuInfoFile << "Vendor: AMD" << std::endl;
+        gpuInfoFile << "Cores: 4096" << std::endl;
+        gpuInfoFile << "GPU Structure: AMD RDNA 4" << std::endl;
+        gpuInfoFile << "VRAM: 16 GB GDDR6" << std::endl;
+        gpuInfoFile << "Memory Interface: 256-bit" << std::endl;
+        gpuInfoFile << "Bandwidth: 640 GB/s" << std::endl;
+        gpuInfoFile << "Base Clock: 2.97 GHz" << std::endl;
+        gpuInfoFile << "TGP: 304 W" << std::endl;
+        gpuInfoFile << "Supported Graphics Features: DirectX 12 Ultimate" << std::endl;
+        gpuInfoFile << "Calculated Monitor Refresh Rate (60Hz): " << nwidth_value << " pixels/second" << std::endl;
+        gpuInfoFile << "Calculated Monitor Refresh Rate (60Hz): " << nheight_value << " pixels/second" << std::endl;
+        gpuInfoFile.close(); // Close the file after writing
+    } else {
+        std::cerr << "Unable to open file for writing GPU details." << std::endl;
+    }
+}

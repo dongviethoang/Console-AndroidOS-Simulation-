@@ -1,6 +1,9 @@
 import pygame
 import sys
 import os
+
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
+
 from enum import Enum
 import time
 
@@ -199,3 +202,4 @@ class BootManager:
 if __name__ == "__main__":
     manager = BootManager()
     manager.run()
+    sys.exit(0)

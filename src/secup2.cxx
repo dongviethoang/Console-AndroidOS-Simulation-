@@ -900,6 +900,8 @@ void powerop() {
         system(R"(taskkill /IM "build398.exe" /F 2>&1)");
         // system(R"(del /f "D:\Console AndroidOS\bin\$null")");
         clear_console();
+        sleep.delay(1000);
+        cout << "It is now safe to turn off your computer." << el;
         exit(0);
     } else if (powerinp == "Sign out" || powerinp == "sign out" || powerinp == "signout") {
         login();
@@ -966,7 +968,7 @@ void newui() {
                 cout << "Environment Variables\n";
                 cout << "Play External Sound\n";
                 // cout << "23. New UI mode\n";
-                cout << "(Developer/Tester) Power\n";
+                cout << "Power\n";
             }
             else if (newuiinput == "apps") {
                 cout << "\nApps:" << el;
@@ -993,7 +995,7 @@ void newui() {
                 cout << "Text Editor\n";
                 cout << "Environment Variables\n";
                 cout << "Play External Sound\n";
-                cout << "Sign out\n";
+                cout << "Power\n";
             }
             else if (newuiinput == "calculator") {
                 calculator();
@@ -1057,7 +1059,7 @@ void newui() {
             {
                 lock_screen();
             }
-            else if (newuiinput == "shutdown" || newuiinput == "exit")
+            /* else if (newuiinput == "shutdown" || newuiinput == "exit")
             {
                 cout << "Shutting down..." << el;
                 system(R"(taskkill /IM "build398.exe" /F > $null 2>&1)");
@@ -1068,16 +1070,17 @@ void newui() {
                 delay(1000);
                 exit(0);
             }
+            */
             else if (newuiinput == "devmgr")
             {
                 devicemgr();
             }
-            else if (newuiinput == "restart")
+            /* else if (newuiinput == "restart")
             {
                 cout << "Restarting...";
                 restart();
-            }
-            else if (newuiinput == "power" && (current_user == "Developer" || current_user == "Tester") && activated) {
+            } */
+            else if (newuiinput == "power") {
                 powerop();
             }
             else if (newuiinput == "explorer")
@@ -1136,12 +1139,12 @@ void newui() {
                 break; // exit the new UI
             }
             */
-            else if (newuiinput == "signout")
+            /* else if (newuiinput == "signout")
             {
                 cout << "Signing out from Developer/Tester mode..." << el;
                 sleep.delay(1000);
                 login();
-            }
+            } */
             else
             {
                 cout << "Invalid option." << el;
