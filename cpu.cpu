@@ -1,11 +1,14 @@
-import cpulib.pu
+import cpulib.pu.cpuconf.conf
+from cpulib.pu import cpuconf
 
-class integer(setmax(64))
+cpulib.pu.cpuconf.conf.integer(cpulib.pu.cpuconf.conf.setmax(64))
 
-if os(true):
-    return 1
+if cpulib.pu.cpuconf.conf.os_d(True):
+    os_detected = True
+else:
+    os_detected = False
 
-setcores(
+cpulib.pu.cpuconf.conf.setcores(
     p = 8,
     e = 16,
 )
@@ -14,4 +17,9 @@ manufacturer = "intel"
 series = "i9"
 generation = "14"
 
-exit(0x01) // makes sure that the os can read the CPU
+with open("cpu_info.txt", "w") as f:
+    f.write(f"Manufacturer: {manufacturer}\n")
+    f.write(f"Series: {series}\n")
+    f.write(f"Generation: {generation}\n")
+
+cpulib.pu.cpuconf.conf.exitf(0x00) # makes sure that the os can read the CPU

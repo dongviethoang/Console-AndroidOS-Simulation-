@@ -1,0 +1,2 @@
+Performance cores: 8
+Efficiency cores: 16

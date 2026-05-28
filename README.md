@@ -1,5 +1,5 @@
 # Console-AndroidOS-Simulation
-I am developing an OS simulation. Currently at build 398 (beta1)
+I am developing an OS simulation. Currently at build 508 (R1)
 
 # NOTE
 This is not a real operating system as it can get me in trouble by lawsuits from Google.
